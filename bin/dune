@@ -1,0 +1,4 @@
+(executable
+ (public_name drunner)
+ (name main)
+ (libraries core base core_unix))
