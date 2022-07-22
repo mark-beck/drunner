@@ -33,6 +33,7 @@ setup.log
 _opam/
 
 ### VisualStudioCode ###
+.vscode/
 .vscode/*
 !.vscode/settings.json
 !.vscode/tasks.json
