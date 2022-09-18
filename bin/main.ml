@@ -47,7 +47,7 @@ let get_desktop_entries dir =
 
 
 let get_bins (dir : string) =
-  S.readdir dir |> Array.to_list |> List.map ~f:(fun name -> {displayname = name; exec = [name]})
+  try S.readdir dir |> Array.to_list |> List.map ~f:(fun name -> {displayname = name; exec = [name]}) with Sys_error _ -> []
 
 let open_dmenu bins =
   let (_inch, outch) = Core_unix.open_process "dmenu -i" in
