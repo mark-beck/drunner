@@ -2,6 +2,7 @@ module S = Sys
 open Core
 module Unix = Core_unix
 
+(**replaces ~ with the correct path*)
 let realize_path path =
   if String.is_prefix path ~prefix:"~" then
     let path = String.chop_prefix_exn path ~prefix:"~" in
@@ -9,6 +10,7 @@ let realize_path path =
   else
     path
 
+(**returns a list of all desktop paths*)
 let desktop_paths =
   ["/usr/share/applications/"; "/usr/local/share/applications/"; "~/.local/share/applications/"]
   |> List.map ~f:realize_path
@@ -23,6 +25,7 @@ type exec = Bin of bin | Command of string
 
 exception ParseError
 
+(**parse a desktop entry into a bin*)
 let parse_entry content =
   let lines = String.split_lines content |> List.filter ~f:(fun line -> String.contains line '=') in
   let map = lines |> List.map ~f:(fun line ->
@@ -36,6 +39,7 @@ let parse_entry content =
   let exec = List.Assoc.find_exn map ~equal:String.equal "Exec" |> String.split ~on:' ' |> List.filter ~f:(fun e -> not (String.contains e '%')) in
   {displayname; exec}
 
+(**reads all desktop entries in folder and converts them to (list bin)*)
 let get_desktop_entries dir =
   try S.readdir dir |> Array.to_list |> List.filter_map ~f:(fun filename ->
     let filepath = String.concat [dir; filename] in
@@ -45,10 +49,11 @@ let get_desktop_entries dir =
   with
   | _ -> []
 
-
+(**convert all filenames in dir into bins*)
 let get_bins (dir : string) =
   try S.readdir dir |> Array.to_list |> List.map ~f:(fun name -> {displayname = name; exec = [name]}) with Sys_error _ -> []
 
+(**opens dmenu with a list of bins and returns an optional exec*)
 let open_dmenu bins =
   let (_inch, outch) = Core_unix.open_process "dmenu -i" in
   List.iter bins ~f:(fun bin ->
@@ -62,7 +67,7 @@ let open_dmenu bins =
       |> Option.value_map ~default:(Command ret) ~f:(fun bin -> Bin bin))
   
 
-
+(**executes a binary or command*)
 let execute exec =
   let command = match exec with
   | Bin bin   -> bin.exec
