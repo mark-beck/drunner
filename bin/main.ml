@@ -99,7 +99,7 @@ let get_desktop_entries dir =
 
 (**convert all filenames in dir into bins*)
 let get_bins (dir : string) =
-  try S.readdir dir |> Array.to_list |> List.map ~f:(fun displayname -> {displayname; exec = [displayname]; exectimes = 0}) with Sys_error _ -> []
+  try S.readdir dir |> Array.to_list |> List.map ~f:(fun displayname -> {displayname; exec = [dir ^ "/" ^ displayname]; exectimes = 0}) with Sys_error _ -> []
 
 (**opens dmenu with a list of bins and returns an optional exec*)
 let open_dmenu (bins : bin list) =
@@ -120,7 +120,8 @@ let execute exec =
   let command = match exec with
   | Bin bin   -> bin.exec
   | Command c -> c |> String.split ~on:' ' in
-  Unix.create_process ~prog:(List.hd_exn command) ~args:(List.tl_exn command) |> ignore
+  Printf.printf "Executing: %s\n" (String.concat command ~sep:" ");
+  S.command (String.concat command ~sep:" ") |> ignore
 
 let () = 
   let path = Sys.getenv_exn "PATH" |> String.split ~on:':' |> List.map ~f:realize_path in
