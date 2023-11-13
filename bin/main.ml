@@ -99,7 +99,12 @@ let get_desktop_entries dir =
 
 (**convert all filenames in dir into bins*)
 let get_bins (dir : string) =
-  try S.readdir dir |> Array.to_list |> List.map ~f:(fun displayname -> {displayname; exec = [dir ^ "/" ^ displayname]; exectimes = 0}) with Sys_error _ -> []
+  try
+    dir
+    |> S.readdir
+    |> Array.to_list
+    |> List.map ~f:(fun displayname -> {displayname; exec = [dir ^ "/" ^ displayname]; exectimes = 0}) 
+  with Sys_error _ -> []
 
 (**opens dmenu with a list of bins and returns an optional exec*)
 let open_dmenu (bins : bin list) =
@@ -109,11 +114,15 @@ let open_dmenu (bins : bin list) =
   Out_channel.close outch;
   let ret = In_channel.input_line inch in
   ret |> Option.map ~f:(fun ret ->
-    bins 
+    bins
     |> List.find ~f:(fun bin ->
-      String.(=) bin.displayname ret) 
+      String.(=) bin.displayname ret)
       |> Option.value_map ~default:(Command ret) ~f:(fun bin -> Bin bin))
-  
+
+
+let dedup = 
+  List.stable_dedup_staged ~compare:(fun bin1 bin2 ->  String.compare bin1.displayname bin2.displayname) 
+  |> Staged.unstage
 
 (**executes a binary or command*)
 let execute exec =
@@ -132,7 +141,6 @@ let () =
   |> List.map ~f:get_desktop_entries 
   |> List.concat in
   let prevs = read_prevs prevs_path in
-  let dedup = List.stable_dedup_staged ~compare:(fun bin1 bin2 ->  String.compare (String.concat bin1.exec) (String.concat bin2.exec)) |> Staged.unstage in
   List.concat [desktop_entries; bins] 
   |> dedup
   |> apply_prevs ~prevs
