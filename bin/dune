@@ -1,4 +1,6 @@
 (executable
  (public_name drunner)
  (name main)
+ (preprocess
+  (pps ppx_let ppx_inline_test))
  (libraries core base core_unix))

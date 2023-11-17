@@ -26,35 +26,35 @@ type bin =
   { displayname : string
   ; exec : string list
   ; exectimes : int
-  }
+  } [@@deriving show]
 
 type exec =
   | Bin of bin
-  | Command of string
+  | Command of string [@@deriving show]
 
 type prev =
   { name : string
   ; times : int
-  }
+  } [@@deriving show]
 
 exception ParseError
 
+let split_colon line =
+  match String.split line ~on:':' with
+  | [ name; times ] -> Some (name, times)
+  | _ -> None
+;;
+
 (**read prev file*)
 let read_prevs path =
+  let open Option.Let_syntax in
   try
-    let content = In_channel.read_all path in
-    let lines = String.split_lines content in
-    let prevs =
-      List.filter_map lines ~f:(fun line ->
-        let parts = String.split line ~on:':' in
-        try
-          match parts with
-          | [ name; times ] -> Some { name; times = Int.of_string times }
-          | _ -> None
-        with
-        | _ -> None)
-    in
-    prevs
+    path
+    |> In_channel.read_lines
+    |> List.filter_map ~f:(fun line ->
+      let%bind name, times = split_colon line in
+      let%bind times = Int.of_string_opt times in
+      Some { name; times })
   with
   | _ -> []
 ;;
@@ -62,10 +62,12 @@ let read_prevs path =
 (**apply prevs to bins*)
 let apply_prevs bins ~prevs =
   List.map bins ~f:(fun bin ->
-    let prev = List.find prevs ~f:(fun prev -> String.( = ) prev.name bin.displayname) in
-    match prev with
-    | Some prev -> { bin with exectimes = prev.times }
-    | None -> bin)
+    let exectimes =
+      prevs
+      |> List.find ~f:(fun prev -> String.( = ) prev.name bin.displayname)
+      |> Option.value_map ~default:0 ~f:(fun prev -> prev.times)
+    in
+    { bin with exectimes })
   |> List.sort ~compare:(fun a b -> Int.compare b.exectimes a.exectimes)
 ;;
 
@@ -90,11 +92,10 @@ let write_prevs ~path prevs =
 
 (**parse a desktop entry into a bin*)
 let parse_entry content =
-  let lines =
-    String.split_lines content |> List.filter ~f:(fun line -> String.contains line '=')
-  in
   let map =
-    lines
+    content
+    |> String.split_lines
+    |> List.filter ~f:(fun line -> String.contains line '=')
     |> List.map ~f:(fun line ->
       match String.split line ~on:'=' with
       | k :: xs -> k, List.hd_exn xs
@@ -118,7 +119,7 @@ let get_desktop_entries dir =
     |> Array.to_list
     |> List.filter_map ~f:(fun filename ->
       let filepath = String.concat [ dir; filename ] in
-      try Some (In_channel.read_all filepath |> parse_entry) with
+      try In_channel.read_all filepath |> parse_entry |> Option.some with
       | _ -> None)
   with
   | _ -> []
@@ -141,8 +142,7 @@ let open_dmenu (bins : bin list) =
   let inch, outch = Core_unix.open_process "dmenu -i" in
   List.iter bins ~f:(fun bin -> Printf.fprintf outch "%s\n" bin.displayname);
   Out_channel.close outch;
-  let ret = In_channel.input_line inch in
-  ret
+  In_channel.input_line inch
   |> Option.map ~f:(fun ret ->
     bins
     |> List.find ~f:(fun bin -> String.( = ) bin.displayname ret)
@@ -167,11 +167,16 @@ let execute exec =
 ;;
 
 let () =
-  let path = Sys.getenv_exn "PATH" |> String.split ~on:':' |> List.map ~f:realize_path in
-  let bins = path |> List.map ~f:get_bins |> List.concat in
-  let desktop_entries = desktop_paths |> List.map ~f:get_desktop_entries |> List.concat in
+  let bins =
+    Sys.getenv_exn "PATH"
+    |> String.split ~on:':'
+    |> List.map ~f:realize_path
+    |> List.concat_map ~f:get_bins
+  in
+  let desktop_entries = desktop_paths |> List.concat_map ~f:get_desktop_entries in
   let prevs = read_prevs prevs_path in
-  List.concat [ desktop_entries; bins ]
+  [ desktop_entries; bins ]
+  |> List.concat
   |> dedup
   |> apply_prevs ~prevs
   |> open_dmenu
